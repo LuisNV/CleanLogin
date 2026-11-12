@@ -59,6 +59,7 @@
 		C386A28B309887C600BA60A3 /* LoginSubmitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C386A28A309887C600BA60A3 /* LoginSubmitView.swift */; };
 		C386A28D30988BEE00BA60A3 /* SocialLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C386A28C30988BEE00BA60A3 /* SocialLoginView.swift */; };
 		C386A28F3098973900BA60A3 /* RegisterPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C386A28E3098973900BA60A3 /* RegisterPromptView.swift */; };
+		C39463BB30A5741000FA0796 /* EditProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39463BA30A5741000FA0796 /* EditProfileViewController.swift */; };
 		C3C608EC308B0554005AD483 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C608EB308B0552005AD483 /* AboutViewController.swift */; };
 		C3CE87AB308F368600E35D1C /* ProfileUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3CE87AA308F368600E35D1C /* ProfileUser.swift */; };
 		C3CE87AE308F36BE00E35D1C /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */; };
@@ -122,7 +123,7 @@
 		C367E8013094811600F826F9 /* MainTabBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabBarController.swift; sourceTree = "<group>"; };
 		C367E80330948E1300F826F9 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C367E8053094959C00F826F9 /* RefreshTokenUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshTokenUseCase.swift; sourceTree = "<group>"; };
-		C3840BF730A46245009388FA /* APIResponse.swift */ = {isa = PBXFileReference; path = APIResponse.swift; sourceTree = "<group>"; };
+		C3840BF730A46245009388FA /* APIResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIResponse.swift; sourceTree = "<group>"; };
 		C386A2783098706200BA60A3 /* LoginHeaderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginHeaderView.swift; sourceTree = "<group>"; };
 		C386A27A309873A800BA60A3 /* LoginFormView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginFormView.swift; sourceTree = "<group>"; };
 		C386A2813098814000BA60A3 /* LoadingOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingOverlayView.swift; sourceTree = "<group>"; };
@@ -131,6 +132,7 @@
 		C386A28A309887C600BA60A3 /* LoginSubmitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginSubmitView.swift; sourceTree = "<group>"; };
 		C386A28C30988BEE00BA60A3 /* SocialLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialLoginView.swift; sourceTree = "<group>"; };
 		C386A28E3098973900BA60A3 /* RegisterPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterPromptView.swift; sourceTree = "<group>"; };
+		C39463BA30A5741000FA0796 /* EditProfileViewController.swift */ = {isa = PBXFileReference; path = EditProfileViewController.swift; sourceTree = "<group>"; };
 		C3C608EB308B0552005AD483 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		C3CE87AA308F368600E35D1C /* ProfileUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUser.swift; sourceTree = "<group>"; };
 		C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 			children = (
 				C3F82272309050C300457A4D /* ProfileViewModel.swift */,
 				C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */,
+				C39463BA30A5741000FA0796 /* EditProfileViewController.swift */,
 			);
 			path = ProfileUser;
 			sourceTree = "<group>";
@@ -615,6 +618,7 @@
 				578005DD29AC3DA385AD682F /* AuthRepository.swift in Sources */,
 				C3CE87B1308F376B00E35D1C /* AppColors.swift in Sources */,
 				E8B22381571381911019274F /* LoginUseCase.swift in Sources */,
+				C39463BB30A5741000FA0796 /* EditProfileViewController.swift in Sources */,
 				C3840BF830A46245009388FA /* APIResponse.swift in Sources */,
 				1FF3C59406A032413911DFB7 /* LogoutUseCase.swift in Sources */,
 				C386A2823098814000BA60A3 /* LoadingOverlayView.swift in Sources */,

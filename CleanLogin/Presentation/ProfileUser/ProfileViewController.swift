@@ -27,14 +27,19 @@ final class ProfileViewController: UIViewController {
     private let avatarLabel = UILabel()
     private let nameLabel = UILabel()
     private let accountLabel = UILabel()
-    private let fullNameValueLabel = UILabel()
+    private let birthdayValueLabel = UILabel()
+    private var currentUser: User?
+    private var editedDraft: ProfileEditDraft?
+    private let editedAvatarView = UIImageView()
+    var onChangePasswordTapped: (() -> Void)?
+    var onVerifyEmailTapped: (() -> Void)?
     private let emailValueLabel = UILabel()
     private let phoneValueLabel = UILabel()
     private let addressValueLabel = UILabel()
     private let errorLabel = UILabel()
     private var logoutTask: Task<Void, Never>?
     private let editButton = UIButton(type: .system)
-    private let privacyLabel = UILabel()
+    private let logoutButton = UIButton(type: .system)
     private let spinner = UIActivityIndicatorView(style: .medium)
     
     // MARK: Khởi tạo
@@ -82,7 +87,7 @@ final class ProfileViewController: UIViewController {
     // MARK: Navigation bar
     
     private func setupNavigationBar() {
-        navigationItem.title = "Thông tin cá nhân"
+        navigationItem.title = "Cá nhân"
         view.backgroundColor = AppColors.background
         
         navigationItem.largeTitleDisplayMode = .never
@@ -95,12 +100,7 @@ final class ProfileViewController: UIViewController {
             .foregroundColor: AppColors.text,
             .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
         ]
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            image: UIImage(systemName: "chevron.left"),
-            style: .plain,
-            target: self,
-            action: #selector(handleBackTapped)
-        )
+        navigationItem.hidesBackButton = true
         
         navigationItem.standardAppearance = appearance
         navigationItem.scrollEdgeAppearance = appearance
@@ -108,15 +108,12 @@ final class ProfileViewController: UIViewController {
     }
     
     // MARK: Bố cục tổng thể
-    @objc private func handleBackTapped(){
-        navigationController?.popViewController(animated: true)
-    }   
     private func setupLayout() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         contentStack.translatesAutoresizingMaskIntoConstraints = false
         
         contentStack.axis = .vertical
-        contentStack.spacing = 24
+        contentStack.spacing = 20
         contentStack.alignment = .fill
         
         view.addSubview(scrollView)
@@ -140,15 +137,15 @@ final class ProfileViewController: UIViewController {
             // Nội dung cách hai mép màn hình 24 điểm.
             contentStack.topAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.topAnchor,
-                constant: 18
+                constant: 20
             ),
             contentStack.leadingAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.leadingAnchor,
-                constant: 24
+                constant: 20
             ),
             contentStack.trailingAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.trailingAnchor,
-                constant: -24
+                constant: -20
             ),
             contentStack.bottomAnchor.constraint(
                 equalTo: scrollView.contentLayoutGuide.bottomAnchor,
@@ -158,7 +155,7 @@ final class ProfileViewController: UIViewController {
             // Chỉ cuộn dọc, không cuộn ngang.
             contentStack.widthAnchor.constraint(
                 equalTo: scrollView.frameLayoutGuide.widthAnchor,
-                constant: -48
+                constant: -40
             )
         ])
     }
@@ -175,12 +172,12 @@ final class ProfileViewController: UIViewController {
         avatarLabel.textAlignment = .center
         avatarLabel.textColor = AppColors.primary
         avatarLabel.backgroundColor = AppColors.avatarBackground
-        avatarLabel.layer.cornerRadius = 44
+        avatarLabel.layer.cornerRadius = 40
         avatarLabel.clipsToBounds = true
         avatarLabel.isAccessibilityElement = false
         
         
-        nameLabel.font = .systemFont(ofSize: 23, weight: .bold)
+        nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
         nameLabel.textColor = AppColors.text
         nameLabel.textAlignment = .center
         nameLabel.numberOfLines = 0
@@ -197,8 +194,8 @@ final class ProfileViewController: UIViewController {
         contentStack.addArrangedSubview(headerStack)
         
         NSLayoutConstraint.activate([
-            avatarLabel.widthAnchor.constraint(equalToConstant: 88),
-            avatarLabel.heightAnchor.constraint(equalToConstant: 88),
+            avatarLabel.widthAnchor.constraint(equalToConstant: 80),
+            avatarLabel.heightAnchor.constraint(equalToConstant: 80),
             
             nameLabel.widthAnchor.constraint(
                 equalTo: headerStack.widthAnchor
@@ -214,14 +211,14 @@ final class ProfileViewController: UIViewController {
         sectionStack.spacing = 12
         
         let titleLabel = UILabel()
-        titleLabel.text = "Thông tin cơ bản"
+        titleLabel.text = "Thông tin cá nhân"
         titleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         titleLabel.textColor = AppColors.text
         
         let cardStack = UIStackView()
         cardStack.axis = .vertical
         cardStack.backgroundColor = .white
-        cardStack.layer.cornerRadius = 18
+        cardStack.layer.cornerRadius = 14
         cardStack.clipsToBounds = true
         
         cardStack.isLayoutMarginsRelativeArrangement = true
@@ -233,19 +230,36 @@ final class ProfileViewController: UIViewController {
         )
         
         cardStack.addArrangedSubview(
-            makeInformationRow(title: "Họ và tên", valueLabel: fullNameValueLabel)
-        )
-        cardStack.addArrangedSubview(
             makeInformationRow(title: "Email", valueLabel: emailValueLabel)
         )
         cardStack.addArrangedSubview(
             makeInformationRow(title: "Số điện thoại", valueLabel: phoneValueLabel)
         )
         cardStack.addArrangedSubview(
-            makeInformationRow(title: "Địa chỉ", valueLabel: addressValueLabel)
+            makeInformationRow(title: "Ngày sinh", valueLabel: birthdayValueLabel)
         )
+        cardStack.addArrangedSubview(
+            makeInformationRow(title: "Khu vực", valueLabel: addressValueLabel)
+        )
+        for row in cardStack.arrangedSubviews.dropLast() {
+            let separator = makeSeparator()
+            row.addSubview(separator)
+            NSLayoutConstraint.activate([
+                separator.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+                separator.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+                separator.bottomAnchor.constraint(equalTo: row.bottomAnchor)
+            ])
+        }
         
-        sectionStack.addArrangedSubview(titleLabel)
+        editButton.setTitle("Sửa", for: .normal)
+        editButton.setTitleColor(AppColors.primary, for: .normal)
+        editButton.titleLabel?.font = .systemFont(ofSize: 15)
+        editButton.addTarget(self, action: #selector(handleEditTapped), for: .touchUpInside)
+        editButton.setContentHuggingPriority(.required, for: .horizontal)
+        let sectionHeader = UIStackView(arrangedSubviews: [titleLabel, editButton])
+        sectionHeader.alignment = .center
+        sectionHeader.spacing = 8
+        sectionStack.addArrangedSubview(sectionHeader)
         sectionStack.addArrangedSubview(cardStack)
         
         contentStack.addArrangedSubview(sectionStack)
@@ -261,7 +275,7 @@ final class ProfileViewController: UIViewController {
         titleLabel.font = .systemFont(ofSize: 12)
         titleLabel.textColor = AppColors.secondaryText
         
-        valueLabel.font = .systemFont(ofSize: 15, weight: .medium)
+        valueLabel.font = .systemFont(ofSize: 16)
         valueLabel.textColor = AppColors.text
         valueLabel.numberOfLines = 0
         
@@ -276,13 +290,13 @@ final class ProfileViewController: UIViewController {
         container.addSubview(rowStack)
         
         NSLayoutConstraint.activate([
-            // Cao tối thiểu 70, có thể tăng nếu nội dung dài.
+            // Cao tối thiểu 58, có thể tăng nếu nội dung dài.
             container.heightAnchor.constraint(
-                greaterThanOrEqualToConstant: 70
+                greaterThanOrEqualToConstant: 58
             ),
             rowStack.topAnchor.constraint(
                 equalTo: container.topAnchor,
-                constant: 12
+                constant: 10
             ),
             rowStack.leadingAnchor.constraint(
                 equalTo: container.leadingAnchor
@@ -292,7 +306,7 @@ final class ProfileViewController: UIViewController {
             ),
             rowStack.bottomAnchor.constraint(
                 lessThanOrEqualTo: container.bottomAnchor,
-                constant: -12
+                constant: -10
             )
         ])
         
@@ -301,44 +315,123 @@ final class ProfileViewController: UIViewController {
     
     // MARK: Nút chỉnh sửa và ghi chú
     
-    private func setupActions() {
-        editButton.setTitle("Đăng xuất", for: .normal)
-        editButton.setTitleColor(.white, for: .normal)
-        editButton.titleLabel?.font = .systemFont(ofSize: 16)
-        editButton.backgroundColor = AppColors.primary
-        editButton.layer.cornerRadius = 14
-        
-        editButton.addTarget(
-            self,
-            action: #selector(handleEditTapped),
-            for: .touchUpInside
-        )
-        
-        privacyLabel.text = "Thông tin của bạn được bảo mật"
-        privacyLabel.font = .systemFont(ofSize: 12)
-        privacyLabel.textColor = AppColors.secondaryText
-        privacyLabel.textAlignment = .center
-        privacyLabel.numberOfLines = 0
-        
-        contentStack.addArrangedSubview(editButton)
-        contentStack.addArrangedSubview(privacyLabel)
-        
-        editButton.heightAnchor
-            .constraint(equalToConstant: 52)
-            .isActive = true
+    private func makeSeparator() -> UIView {
+        let separator = UIView()
+        separator.backgroundColor = UIColor(red: 225 / 255, green: 231 / 255, blue: 241 / 255, alpha: 1)
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        separator.heightAnchor.constraint(equalToConstant: 0.5).isActive = true
+        return separator
     }
+
+    private func setupActions() {
+        let actions = UIStackView()
+        actions.axis = .vertical
+        actions.backgroundColor = .white
+        actions.layer.cornerRadius = 14
+        actions.isLayoutMarginsRelativeArrangement = true
+        actions.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: 18, bottom: 0, trailing: 18)
+        actions.addArrangedSubview(makeActionRow(title: "Đổi mật khẩu", subtitle: nil, action: #selector(handleChangePasswordTapped)))
+        actions.addArrangedSubview(makeSeparator())
+        actions.addArrangedSubview(makeActionRow(title: "Xác thực email", subtitle: "Chưa có thông tin", action: #selector(handleVerifyEmailTapped)))
+        contentStack.addArrangedSubview(actions)
+
+        logoutButton.setTitle("Đăng xuất", for: .normal)
+        logoutButton.setTitleColor(.white, for: .normal)
+        logoutButton.titleLabel?.font = .systemFont(ofSize: 16)
+        logoutButton.backgroundColor = AppColors.primary
+        logoutButton.layer.cornerRadius = 10
+        logoutButton.layer.borderWidth = 0.75
+        logoutButton.layer.borderColor = AppColors.primary.cgColor
+        logoutButton.addTarget(self, action: #selector(handleLogoutTapped), for: .touchUpInside)
+        contentStack.addArrangedSubview(logoutButton)
+        logoutButton.heightAnchor.constraint(equalToConstant: 44).isActive = true
+    }
+
+    private func makeActionRow(title: String, subtitle: String?, action: Selector) -> UIView {
+        let button = UIButton(type: .system)
+        button.addTarget(self, action: action, for: .touchUpInside)
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 16)
+        titleLabel.textColor = AppColors.text
+        titleLabel.numberOfLines = 0
+        let statusLabel = UILabel()
+        statusLabel.text = subtitle
+        statusLabel.font = .systemFont(ofSize: 12)
+        statusLabel.textColor = .systemOrange
+        statusLabel.numberOfLines = 0
+        statusLabel.textAlignment = .right
+        let chevron = UIImageView(image: UIImage(systemName: "chevron.right"))
+        chevron.tintColor = AppColors.secondaryText
+        chevron.contentMode = .scaleAspectFit
+        let stack = UIStackView(arrangedSubviews: [titleLabel, statusLabel, chevron])
+        stack.spacing = 10
+        stack.alignment = .center
+        stack.isUserInteractionEnabled = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        button.addSubview(stack)
+        button.accessibilityLabel = [title, subtitle].compactMap { $0 }.joined(separator: ", ")
+        NSLayoutConstraint.activate([
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 48),
+            stack.leadingAnchor.constraint(equalTo: button.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: button.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: button.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: button.bottomAnchor, constant: -12),
+            chevron.widthAnchor.constraint(equalToConstant: 10),
+            chevron.heightAnchor.constraint(equalToConstant: 16)
+        ])
+        return button
+    }
+
     private func render(_ state: ProfileViewState) {
         avatarLabel.text = state.user?.initials
         nameLabel.text = state.user?.fullName
-        fullNameValueLabel.text = state.user?.fullName
+        currentUser = state.user
+        birthdayValueLabel.text = "Chưa cập nhật"
         emailValueLabel.text = state.user?.email
         phoneValueLabel.text = state.user?.phone
         addressValueLabel.text = state.user?.address
+        editButton.isEnabled = state.user != nil && !state.isLoading
+        logoutButton.isEnabled = !state.isLoading
         spinner.isHidden = !state.isLoading
+        if state.isLoading {
+            spinner.startAnimating()
+        } else {
+            spinner.stopAnimating()
+        }
+        errorLabel.text = state.errorMessage
+        errorLabel.isHidden = state.errorMessage == nil
+        renderEditedDraft()
     }
+    private func renderEditedDraft() {
+        guard let draft = editedDraft else { return }
+        nameLabel.text = draft.user.fullName
+        avatarLabel.text = draft.user.initials
+        emailValueLabel.text = draft.user.email
+        phoneValueLabel.text = draft.user.phone
+        addressValueLabel.text = draft.user.address
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM/yyyy"
+        birthdayValueLabel.text = draft.birthday.map { formatter.string(from: $0) } ?? "Chưa cập nhật"
+        if editedAvatarView.superview == nil {
+            editedAvatarView.translatesAutoresizingMaskIntoConstraints = false
+            editedAvatarView.contentMode = .scaleAspectFill
+            editedAvatarView.layer.cornerRadius = 40
+            editedAvatarView.clipsToBounds = true
+            avatarLabel.addSubview(editedAvatarView)
+            NSLayoutConstraint.activate([
+                editedAvatarView.leadingAnchor.constraint(equalTo: avatarLabel.leadingAnchor),
+                editedAvatarView.trailingAnchor.constraint(equalTo: avatarLabel.trailingAnchor),
+                editedAvatarView.topAnchor.constraint(equalTo: avatarLabel.topAnchor),
+                editedAvatarView.bottomAnchor.constraint(equalTo: avatarLabel.bottomAnchor)
+            ])
+        }
+        editedAvatarView.image = draft.avatar
+    }
+
     // MARK: Xử lý thao tác
     
-    @objc private func handleEditTapped() {
+    @objc private func handleLogoutTapped() {
         guard logoutTask == nil else { return }
         let viewModel = viewModel
         logoutTask = Task { [weak self, viewModel] in
@@ -346,5 +439,44 @@ final class ProfileViewController: UIViewController {
             self?.logoutTask = nil
         }
     }
+    @objc private func handleEditTapped() {
+        guard let user = currentUser else { return }
+        if let onEditTapped {
+            onEditTapped(ProfileUser(fullName: user.fullName, email: user.email, phone: user.phone, address: user.address))
+        } else {
+            let draft = editedDraft ?? ProfileEditDraft(
+                user: ProfileUser(fullName: user.fullName, email: user.email, phone: user.phone, address: user.address)
+            )
+            let screen = EditProfileViewController(draft: draft)
+            screen.onSave = { [weak self] draft in
+                self?.editedDraft = draft
+                self?.renderEditedDraft()
+            }
+            navigationController?.pushViewController(screen, animated: true)
+        }
+    }
+
+    @objc private func handleChangePasswordTapped() {
+        if let onChangePasswordTapped {
+            onChangePasswordTapped()
+        } else {
+            showUnavailableMessage(title: "Đổi mật khẩu")
+        }
+    }
+
+    @objc private func handleVerifyEmailTapped() {
+        if let onVerifyEmailTapped {
+            onVerifyEmailTapped()
+        } else {
+            showUnavailableMessage(title: "Xác thực email")
+        }
+    }
+
+    private func showUnavailableMessage(title: String) {
+        let alert = UIAlertController(title: title, message: "Tính năng này hiện chưa được hỗ trợ.", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Đóng", style: .default))
+        present(alert, animated: true)
+    }
+
 }
 

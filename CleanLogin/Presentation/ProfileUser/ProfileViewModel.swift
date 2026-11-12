@@ -30,6 +30,8 @@ final class ProfileViewModel{
     func loadUser() async {
         guard !stateRelay.value.isLoading else { return }
         stateRelay.accept(ProfileViewState(user: stateRelay.value.user, isLoading: true))
+        LoadingManager.shared.show()
+        defer { LoadingManager.shared.hide() }
         
         do {
             let user = try await getUserUseCase.execute()

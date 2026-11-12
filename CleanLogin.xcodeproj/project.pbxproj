@@ -60,6 +60,8 @@
 		C386A28D30988BEE00BA60A3 /* SocialLoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C386A28C30988BEE00BA60A3 /* SocialLoginView.swift */; };
 		C386A28F3098973900BA60A3 /* RegisterPromptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C386A28E3098973900BA60A3 /* RegisterPromptView.swift */; };
 		C39463BB30A5741000FA0796 /* EditProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39463BA30A5741000FA0796 /* EditProfileViewController.swift */; };
+		C39463BD30A5A28400FA0796 /* DatePickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39463BC30A5A28400FA0796 /* DatePickerSheet.swift */; };
+		C39463C030A5A47700FA0796 /* FormFieldView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39463BF30A5A47700FA0796 /* FormFieldView.swift */; };
 		C3C608EC308B0554005AD483 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3C608EB308B0552005AD483 /* AboutViewController.swift */; };
 		C3CE87AB308F368600E35D1C /* ProfileUser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3CE87AA308F368600E35D1C /* ProfileUser.swift */; };
 		C3CE87AE308F36BE00E35D1C /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */; };
@@ -132,7 +134,9 @@
 		C386A28A309887C600BA60A3 /* LoginSubmitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginSubmitView.swift; sourceTree = "<group>"; };
 		C386A28C30988BEE00BA60A3 /* SocialLoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialLoginView.swift; sourceTree = "<group>"; };
 		C386A28E3098973900BA60A3 /* RegisterPromptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisterPromptView.swift; sourceTree = "<group>"; };
-		C39463BA30A5741000FA0796 /* EditProfileViewController.swift */ = {isa = PBXFileReference; path = EditProfileViewController.swift; sourceTree = "<group>"; };
+		C39463BA30A5741000FA0796 /* EditProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileViewController.swift; sourceTree = "<group>"; };
+		C39463BC30A5A28400FA0796 /* DatePickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatePickerSheet.swift; sourceTree = "<group>"; };
+		C39463BF30A5A47700FA0796 /* FormFieldView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormFieldView.swift; sourceTree = "<group>"; };
 		C3C608EB308B0552005AD483 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		C3CE87AA308F368600E35D1C /* ProfileUser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileUser.swift; sourceTree = "<group>"; };
 		C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
@@ -323,6 +327,8 @@
 		C386A27F3098811B00BA60A3 /* Common */ = {
 			isa = PBXGroup;
 			children = (
+				C39463C130A5A4BE00FA0796 /* FormFieldView */,
+				C39463BE30A5A29A00FA0796 /* DatePickerSheet */,
 				C386A2873098835C00BA60A3 /* Toast */,
 				C386A2803098812600BA60A3 /* Loading */,
 			);
@@ -344,6 +350,22 @@
 				C386A2883098836900BA60A3 /* ToastManager.swift */,
 			);
 			path = Toast;
+			sourceTree = "<group>";
+		};
+		C39463BE30A5A29A00FA0796 /* DatePickerSheet */ = {
+			isa = PBXGroup;
+			children = (
+				C39463BC30A5A28400FA0796 /* DatePickerSheet.swift */,
+			);
+			path = DatePickerSheet;
+			sourceTree = "<group>";
+		};
+		C39463C130A5A4BE00FA0796 /* FormFieldView */ = {
+			isa = PBXGroup;
+			children = (
+				C39463BF30A5A47700FA0796 /* FormFieldView.swift */,
+			);
+			path = FormFieldView;
 			sourceTree = "<group>";
 		};
 		C3C608E8308B051B005AD483 /* About */ = {
@@ -588,6 +610,7 @@
 				C3F822753090557700457A4D /* GetUserUseCaseProtocol.swift in Sources */,
 				A86EEDD194CD3D24B67E89E4 /* AppConfiguration.swift in Sources */,
 				9591B94B213C4BEE58C41396 /* AppContainer.swift in Sources */,
+				C39463C030A5A47700FA0796 /* FormFieldView.swift in Sources */,
 				902181A0C3B154502FD75BE7 /* AppCoordinator.swift in Sources */,
 				BE527910A6E747CAE3F485CE /* AppDelegate.swift in Sources */,
 				C367E7FB30947E8C00F826F9 /* ListeningTopic.swift in Sources */,
@@ -598,6 +621,7 @@
 				883BD3C34BD90AA898B38D0B /* APIError.swift in Sources */,
 				C386A28D30988BEE00BA60A3 /* SocialLoginView.swift in Sources */,
 				B3B8DAB4081B668EFB8E1884 /* KeychainTokenStore.swift in Sources */,
+				C39463BD30A5A28400FA0796 /* DatePickerSheet.swift in Sources */,
 				64DE5C016587F6AAD51D1540 /* TokenStore.swift in Sources */,
 				C3C608EC308B0554005AD483 /* AboutViewController.swift in Sources */,
 				C367E806309495B200F826F9 /* RefreshTokenUseCase.swift in Sources */,

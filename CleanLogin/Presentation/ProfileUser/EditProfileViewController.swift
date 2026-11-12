@@ -9,9 +9,9 @@ struct ProfileEditDraft {
     var avatar: UIImage?
 }
 
-final class EditProfileViewController: UIViewController, PHPickerViewControllerDelegate {
+final class EditProfileViewController: UIViewController, PHPickerViewControllerDelegate, UITextFieldDelegate {
     var onSave: ((ProfileEditDraft) -> Void)?
-
+    
     private let draft: ProfileEditDraft
     private let nameField = UITextField()
     private let emailField = UITextField()
@@ -22,7 +22,6 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
     private let genderValueLabel = UILabel()
     private let avatarLabel = UILabel()
     private let avatarImage = UIImageView()
-    private let datePicker = UIDatePicker()
     private var selectedBirthday: Date?
     private var selectedGender: String?
     private let dateFormatter: DateFormatter = {
@@ -31,7 +30,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         formatter.dateFormat = "dd/MM/yyyy"
         return formatter
     }()
-
+    
     init(draft: ProfileEditDraft) {
         self.draft = draft
         selectedBirthday = draft.birthday
@@ -39,19 +38,19 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
-
+    
     required init?(coder: NSCoder) {
         fatalError("Use init(draft:)")
     }
-
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = AppColors.background
         navigationItem.title = "Chỉnh sửa thông tin"
         navigationItem.largeTitleDisplayMode = .never
+        
         let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = AppColors.background
+        appearance.configureWithTransparentBackground()
         appearance.shadowColor = .clear
         appearance.titleTextAttributes = [
             .foregroundColor: AppColors.text,
@@ -59,15 +58,18 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         ]
         navigationItem.standardAppearance = appearance
         navigationItem.scrollEdgeAppearance = appearance
+        navigationItem.compactAppearance = appearance
+        navigationItem.compactScrollEdgeAppearance = appearance
         navigationItem.leftBarButtonItem = UIBarButtonItem(
             image: UIImage(systemName: "chevron.left"), style: .plain,
             target: self, action: #selector(close)
         )
         navigationItem.leftBarButtonItem?.tintColor = AppColors.text
         setupLayout()
+        setupBackground()
         configureInputs()
     }
-
+    
     private func setupLayout() {
         let scrollView = UIScrollView()
         scrollView.keyboardDismissMode = .interactive
@@ -91,24 +93,24 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             stack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -20),
             stack.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -40)
         ])
-
+        
         let header = makeAvatarHeader()
         stack.addArrangedSubview(header)
         stack.setCustomSpacing(24, after: header)
-        stack.addArrangedSubview(makeField("Họ và tên", control: nameField))
-        stack.addArrangedSubview(makeField("Email", control: emailField))
-        stack.addArrangedSubview(makeField("Số điện thoại", control: phoneField))
+        stack.addArrangedSubview(FormFieldView(title: "Họ và tên", control: nameField))
+        stack.addArrangedSubview(FormFieldView(title: "Email", control: emailField))
+        stack.addArrangedSubview(FormFieldView(title: "Số điện thoại", control: phoneField))
         let pair = UIStackView(arrangedSubviews: [
-            makeField("Ngày sinh", control: birthdayField),
-            makeField("Giới tính", control: genderButton)
+            FormFieldView(title: "Ngày sinh", control: birthdayField),
+            FormFieldView(title: "Giới tính", control: genderButton)
         ])
         pair.spacing = 16
         pair.distribution = .fillEqually
         stack.addArrangedSubview(pair)
-        let address = makeField("Địa chỉ", control: addressField)
+        let address = FormFieldView(title: "Địa chỉ", control: addressField)
         stack.addArrangedSubview(address)
         stack.setCustomSpacing(32, after: address)
-
+        
         let saveButton = UIButton(type: .system)
         saveButton.setTitle("Lưu thay đổi", for: .normal)
         saveButton.setTitleColor(.white, for: .normal)
@@ -119,7 +121,30 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         saveButton.addTarget(self, action: #selector(save), for: .touchUpInside)
         stack.addArrangedSubview(saveButton)
     }
-
+    private func setupBackground() {
+        let backgroundView = UIImageView(image: UIImage(named: "backgroundMobile"))
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.contentMode = .scaleAspectFill
+        backgroundView.clipsToBounds = true
+        backgroundView.isAccessibilityElement = false
+        view.insertSubview(backgroundView, at: 0)
+        let overlayView = UIView()
+        overlayView.translatesAutoresizingMaskIntoConstraints = false
+        overlayView.backgroundColor = UIColor.white.withAlphaComponent(0.65)
+        overlayView.isUserInteractionEnabled = false
+        overlayView.isAccessibilityElement = false
+        view.insertSubview(overlayView, aboveSubview: backgroundView)
+        NSLayoutConstraint.activate([
+            overlayView.topAnchor.constraint(equalTo: view.topAnchor),
+            overlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
     private func makeAvatarHeader() -> UIView {
         let header = UIStackView()
         header.axis = .vertical
@@ -140,15 +165,22 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             child.clipsToBounds = true
             container.addSubview(child)
             NSLayoutConstraint.activate([
-                child.topAnchor.constraint(equalTo: container.topAnchor),
-                child.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+                child.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+                child.centerYAnchor.constraint(equalTo: container.centerYAnchor),
                 child.widthAnchor.constraint(equalToConstant: 96),
                 child.heightAnchor.constraint(equalToConstant: 96)
             ])
         }
-        let camera = UIButton(type: .system)
+        let camera = UIButton(type: .custom)
         camera.translatesAutoresizingMaskIntoConstraints = false
-        camera.setImage(UIImage(systemName: "camera.fill"), for: .normal)
+        let cameraImage = UIImage(
+            systemName: "camera.fill",
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+        )
+        camera.setImage(cameraImage, for: .normal)
+        camera.contentHorizontalAlignment = .center
+        camera.contentVerticalAlignment = .center
+        camera.imageView?.contentMode = .scaleAspectFit
         camera.tintColor = .white
         camera.backgroundColor = AppColors.primary
         camera.layer.cornerRadius = 15
@@ -157,13 +189,14 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         camera.accessibilityLabel = "Đổi ảnh đại diện"
         camera.addTarget(self, action: #selector(choosePhoto), for: .touchUpInside)
         container.addSubview(camera)
+        
         NSLayoutConstraint.activate([
             container.widthAnchor.constraint(equalToConstant: 96),
             container.heightAnchor.constraint(equalToConstant: 96),
             camera.widthAnchor.constraint(equalToConstant: 30),
             camera.heightAnchor.constraint(equalToConstant: 30),
-            camera.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            camera.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+            camera.trailingAnchor.constraint(equalTo: avatarLabel.trailingAnchor),
+            camera.bottomAnchor.constraint(equalTo: avatarLabel.bottomAnchor)
         ])
         let change = UIButton(type: .system)
         change.setTitle("Đổi ảnh đại diện", for: .normal)
@@ -175,40 +208,12 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         header.addArrangedSubview(change)
         return header
     }
-
-    private func makeField(_ title: String, control: UIView) -> UIView {
-        let label = UILabel()
-        label.text = title
-        label.font = .systemFont(ofSize: 14)
-        label.textColor = UIColor(white: 0.25, alpha: 1)
-        control.accessibilityLabel = title
-        control.backgroundColor = .white
-        control.layer.cornerRadius = 9
-        control.layer.borderWidth = 1
-        control.layer.borderColor = UIColor(red: 0.84, green: 0.85, blue: 0.89, alpha: 1).cgColor
-        control.heightAnchor.constraint(equalToConstant: 52).isActive = true
-        if let field = control as? UITextField {
-            field.font = .systemFont(ofSize: 16)
-            field.textColor = AppColors.text
-            field.leftView = UIView(frame: CGRect(x: 0, y: 0, width: 14, height: 1))
-            field.leftViewMode = .always
-            field.placeholder = title
-            field.rightViewMode = .never
-            let toolbar = UIToolbar()
-            toolbar.sizeToFit()
-            toolbar.items = [
-                UIBarButtonItem(systemItem: .flexibleSpace),
-                UIBarButtonItem(title: "Xong", style: .done, target: self, action: #selector(endEditing))
-            ]
-            field.inputAccessoryView = toolbar
-        }
-        let stack = UIStackView(arrangedSubviews: [label, control])
-        stack.axis = .vertical
-        stack.spacing = 8
-        return stack
-    }
-
+    
     private func configureInputs() {
+        for field in [nameField, emailField, phoneField, birthdayField, addressField] {
+            field.returnKeyType = .done
+            field.delegate = self
+        }
         nameField.text = draft.user.fullName
         nameField.textContentType = .name
         nameField.autocapitalizationType = .words
@@ -222,17 +227,11 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         phoneField.keyboardType = .phonePad
         addressField.text = draft.user.address
         addressField.textContentType = .fullStreetAddress
-
-        datePicker.datePickerMode = .date
-        datePicker.preferredDatePickerStyle = .wheels
-        datePicker.locale = Locale(identifier: "vi_VN")
-        datePicker.maximumDate = Date()
-        datePicker.date = selectedBirthday ?? Date()
-        datePicker.addTarget(self, action: #selector(dateChanged), for: .valueChanged)
-        birthdayField.inputView = datePicker
+        
+        birthdayField.delegate = self
+        birthdayField.inputAccessoryView = nil
         birthdayField.placeholder = "dd/MM/yyyy"
         birthdayField.text = selectedBirthday.map { dateFormatter.string(from: $0) }
-        birthdayField.addTarget(self, action: #selector(dateChanged), for: .editingDidBegin)
         let icon = UIImageView(image: UIImage(systemName: "calendar"))
         icon.tintColor = AppColors.secondaryText
         icon.contentMode = .scaleAspectFit
@@ -245,7 +244,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         birthdayField.adjustsFontSizeToFitWidth = true
         birthdayField.minimumFontSize = 14
         birthdayField.rightViewMode = .always
-
+        
         genderValueLabel.text = selectedGender ?? "Chọn"
         genderValueLabel.font = .systemFont(ofSize: 16)
         genderValueLabel.textColor = AppColors.text
@@ -280,20 +279,39 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             }
         })
     }
-
-    @objc private func dateChanged() {
-        selectedBirthday = datePicker.date
-        birthdayField.text = dateFormatter.string(from: datePicker.date)
+    
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        return true
     }
-
+    
+    func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
+        guard textField === birthdayField else { return true }
+        showBirthdaySheet()
+        return false
+    }
+    
+    private func showBirthdaySheet() {
+        DatePickerSheet.present(
+            from: self,
+            title: "Ngày sinh",
+            selectedDate: selectedBirthday,
+            maximumDate: Date()
+        ) { [weak self] date in
+            guard let self else { return }
+            self.selectedBirthday = date
+            self.birthdayField.text = self.dateFormatter.string(from: date)
+        }
+    }
+    
     @objc private func endEditing() {
         view.endEditing(true)
     }
-
+    
     @objc private func close() {
         navigationController?.popViewController(animated: true)
     }
-
+    
     @objc private func save() {
         let name = (nameField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         let email = (emailField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -309,7 +327,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         onSave?(ProfileEditDraft(user: user, birthday: selectedBirthday, gender: selectedGender, avatar: avatarImage.image))
         close()
     }
-
+    
     @objc private func choosePhoto() {
         view.endEditing(true)
         var configuration = PHPickerConfiguration()
@@ -319,7 +337,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         picker.delegate = self
         present(picker, animated: true)
     }
-
+    
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
         guard let provider = results.first?.itemProvider else { return }
@@ -334,7 +352,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             }
         }
     }
-
+    
     private func showError(_ message: String) {
         let alert = UIAlertController(title: "Kiểm tra thông tin", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Đóng", style: .default))

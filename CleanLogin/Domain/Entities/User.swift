@@ -6,6 +6,9 @@ struct User: Equatable, Sendable {
     let email: String
     let phone: String
     let address: String
+    let dateOfBirth: String
+    let avatarUrl: String
+    let emailVerified: Bool
     
     var initials: String {
         let words = fullName.split(separator: " ")

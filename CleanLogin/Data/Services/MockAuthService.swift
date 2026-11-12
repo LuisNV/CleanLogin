@@ -23,7 +23,7 @@ final class MockAuthService: AuthService {
     }
     
     private let token = "mock-token-for-learning-only"
-    private let user = UserDTO(id: 1, fullName: "Nguyễn Thành", email: "demo@example.com",phone: "0776426233",address: "Hà Nội")
+    private let user = UserDTO(id: 1, fullName: "Nguyễn Thành", email: "demo@example.com",phone: "0776426233",address: "Hà Nội",dateOfBirth: "1998-02-22",avatarUrl: "", emailVerified: false)
     
     func login(email: String, password: String) async throws -> LoginResponseDTO {
         try await Task.sleep(nanoseconds: 650_000_000)

@@ -15,6 +15,8 @@ final class ProfileViewController: UIViewController {
     
     private let viewModel: ProfileViewModel
     private let disposeBag = DisposeBag()
+    private var avatarTask: Task<Void, Never>?
+    private var avatarURL: URL?
     private var refreshTask: Task<Void, Never>?
     // Coordinator hoặc màn hình trước sẽ xử lý mở trang chỉnh sửa.
     var onEditTapped: ((ProfileUser) -> Void)?
@@ -30,7 +32,7 @@ final class ProfileViewController: UIViewController {
     private let birthdayValueLabel = UILabel()
     private var currentUser: User?
     private var editedDraft: ProfileEditDraft?
-    private let editedAvatarView = UIImageView()
+    private let avatarImageView = UIImageView()
     var onChangePasswordTapped: (() -> Void)?
     var onVerifyEmailTapped: (() -> Void)?
     private let emailValueLabel = UILabel()
@@ -59,6 +61,7 @@ final class ProfileViewController: UIViewController {
         super.viewDidLoad()
         
         setupNavigationBar()
+        setupBackground()
         setupLayout()
         setupProfileHeader()
         setupInformationCard()
@@ -73,11 +76,12 @@ final class ProfileViewController: UIViewController {
             self?.render(state)
         }).disposed(by: disposeBag)
         refreshTask = Task { [weak self] in
-            await self?.viewModel.loadUser()
+            await self?.viewModel.loadUser()    
         }
     }
     
     deinit {
+        avatarTask?.cancel()
         refreshTask?.cancel()
         logoutTask?.cancel()
     }
@@ -93,8 +97,7 @@ final class ProfileViewController: UIViewController {
         navigationItem.largeTitleDisplayMode = .never
         
         let appearance = UINavigationBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = AppColors.background
+        appearance.configureWithTransparentBackground()
         appearance.shadowColor = .clear
         appearance.titleTextAttributes = [
             .foregroundColor: AppColors.text,
@@ -107,6 +110,34 @@ final class ProfileViewController: UIViewController {
         
     }
     
+    private func setupBackground() {
+        let backgroundView = UIImageView(image: UIImage(named: "backgroundMobile"))
+        backgroundView.translatesAutoresizingMaskIntoConstraints = false
+        backgroundView.contentMode = .scaleAspectFill
+        backgroundView.clipsToBounds = true
+        backgroundView.isAccessibilityElement = false
+        view.insertSubview(backgroundView, at: 0)
+
+        // Làm dịu ảnh nền để nội dung phía trên dễ đọc hơn.
+        let overlayView = UIView()
+        overlayView.translatesAutoresizingMaskIntoConstraints = false
+        overlayView.backgroundColor = UIColor.white.withAlphaComponent(0.65)
+        overlayView.isUserInteractionEnabled = false
+        overlayView.isAccessibilityElement = false
+        view.insertSubview(overlayView, aboveSubview: backgroundView)
+
+        NSLayoutConstraint.activate([
+            overlayView.topAnchor.constraint(equalTo: view.topAnchor),
+            overlayView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlayView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlayView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            backgroundView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
     // MARK: Bố cục tổng thể
     private func setupLayout() {
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -175,6 +206,21 @@ final class ProfileViewController: UIViewController {
         avatarLabel.layer.cornerRadius = 40
         avatarLabel.clipsToBounds = true
         avatarLabel.isAccessibilityElement = false
+        if avatarImageView.superview == nil {
+            avatarImageView.translatesAutoresizingMaskIntoConstraints = false
+            avatarImageView.contentMode = .scaleAspectFill
+            avatarImageView.layer.cornerRadius = 40
+            avatarImageView.clipsToBounds = true
+            avatarLabel.addSubview(avatarImageView)
+            NSLayoutConstraint.activate([
+                avatarImageView.leadingAnchor.constraint(equalTo: avatarLabel.leadingAnchor),
+                avatarImageView.trailingAnchor.constraint(equalTo: avatarLabel.trailingAnchor),
+                avatarImageView.topAnchor.constraint(equalTo: avatarLabel.topAnchor),
+                avatarImageView.bottomAnchor.constraint(equalTo: avatarLabel.bottomAnchor)
+            ])
+        }
+        avatarImageView.isHidden = true
+        avatarImageView.isAccessibilityElement = false
         
         
         nameLabel.font = .systemFont(ofSize: 22, weight: .bold)
@@ -387,7 +433,17 @@ final class ProfileViewController: UIViewController {
         avatarLabel.text = state.user?.initials
         nameLabel.text = state.user?.fullName
         currentUser = state.user
-        birthdayValueLabel.text = "Chưa cập nhật"
+        loadAvatar(from: state.user?.avatarUrl)
+        birthdayValueLabel.text = state.user.map { user in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd"
+            guard let birthday = formatter.date(from: user.dateOfBirth) else {
+                return "Chưa cập nhật"
+            }
+            formatter.dateFormat = "dd-MM-yyyy"
+            return formatter.string(from: birthday)
+        }
         emailValueLabel.text = state.user?.email
         phoneValueLabel.text = state.user?.phone
         addressValueLabel.text = state.user?.address
@@ -403,6 +459,38 @@ final class ProfileViewController: UIViewController {
         errorLabel.isHidden = state.errorMessage == nil
         renderEditedDraft()
     }
+    private func loadAvatar(from value: String?) {
+        let value = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let url = URL(string: value).flatMap { url -> URL? in
+            guard let scheme = url.scheme?.lowercased(),
+                  ["http", "https"].contains(scheme),
+                  let host = url.host, !host.isEmpty else { return nil }
+            return url
+        }
+        guard url != avatarURL else { return }
+        avatarTask?.cancel()
+        avatarURL = url
+        avatarImageView.image = nil
+        avatarImageView.isHidden = true
+
+        guard let url, editedDraft?.avatar == nil else { return }
+        avatarTask = Task { [weak self] in
+            do {
+                let (data, response) = try await URLSession.shared.data(from: url)
+                try Task.checkCancellation()
+                guard let response = response as? HTTPURLResponse,
+                      (200..<300).contains(response.statusCode),
+                      let image = UIImage(data: data),
+                      let self, self.avatarURL == url,
+                      self.editedDraft?.avatar == nil else { return }
+                self.avatarImageView.image = image
+                self.avatarImageView.isHidden = false
+            } catch {
+                // Giữ chữ viết tắt khi không tải được ảnh.
+            }
+        }
+    }
+
     private func renderEditedDraft() {
         guard let draft = editedDraft else { return }
         nameLabel.text = draft.user.fullName
@@ -411,22 +499,13 @@ final class ProfileViewController: UIViewController {
         phoneValueLabel.text = draft.user.phone
         addressValueLabel.text = draft.user.address
         let formatter = DateFormatter()
-        formatter.dateFormat = "dd/MM/yyyy"
+        formatter.dateFormat = "dd-MM-yyyy"
         birthdayValueLabel.text = draft.birthday.map { formatter.string(from: $0) } ?? "Chưa cập nhật"
-        if editedAvatarView.superview == nil {
-            editedAvatarView.translatesAutoresizingMaskIntoConstraints = false
-            editedAvatarView.contentMode = .scaleAspectFill
-            editedAvatarView.layer.cornerRadius = 40
-            editedAvatarView.clipsToBounds = true
-            avatarLabel.addSubview(editedAvatarView)
-            NSLayoutConstraint.activate([
-                editedAvatarView.leadingAnchor.constraint(equalTo: avatarLabel.leadingAnchor),
-                editedAvatarView.trailingAnchor.constraint(equalTo: avatarLabel.trailingAnchor),
-                editedAvatarView.topAnchor.constraint(equalTo: avatarLabel.topAnchor),
-                editedAvatarView.bottomAnchor.constraint(equalTo: avatarLabel.bottomAnchor)
-            ])
+        if let avatar = draft.avatar {
+            avatarTask?.cancel()
+            avatarImageView.image = avatar
+            avatarImageView.isHidden = false
         }
-        editedAvatarView.image = draft.avatar
     }
 
     // MARK: Xử lý thao tác
@@ -444,8 +523,12 @@ final class ProfileViewController: UIViewController {
         if let onEditTapped {
             onEditTapped(ProfileUser(fullName: user.fullName, email: user.email, phone: user.phone, address: user.address))
         } else {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd"
             let draft = editedDraft ?? ProfileEditDraft(
-                user: ProfileUser(fullName: user.fullName, email: user.email, phone: user.phone, address: user.address)
+                user: ProfileUser(fullName: user.fullName, email: user.email, phone: user.phone, address: user.address),
+                birthday: formatter.date(from: user.dateOfBirth)
             )
             let screen = EditProfileViewController(draft: draft)
             screen.onSave = { [weak self] draft in

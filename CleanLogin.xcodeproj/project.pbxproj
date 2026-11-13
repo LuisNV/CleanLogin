@@ -41,6 +41,7 @@
 		BE527910A6E747CAE3F485CE /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F0428D44B9E8B41D58A571E /* AppDelegate.swift */; };
 		BFA41F4CF9D93989F6CB206F /* HomeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF8861CE771E651638E2DAD /* HomeViewController.swift */; };
 		C14EDFFA0B02885337A04B8C /* LoginViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DBA0A44EF048876F9A4751B /* LoginViewModel.swift */; };
+		C329BD0430A6EA6800A8D949 /* EditProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C329BD0330A6EA6800A8D949 /* EditProfileViewModel.swift */; };
 		C367E7F53094784900F826F9 /* HSKSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C367E7F43094784600F826F9 /* HSKSectionView.swift */; };
 		C367E7F73094790200F826F9 /* HSKLevel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C367E7F6309478FA00F826F9 /* HSKLevel.swift */; };
 		C367E7F930947B1E00F826F9 /* HSKLevelCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C367E7F830947B1E00F826F9 /* HSKLevelCell.swift */; };
@@ -116,6 +117,7 @@
 		B629390BF1C5C8C162B65183 /* RestoreSessionUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoreSessionUseCase.swift; sourceTree = "<group>"; };
 		B6CDB6E5D160E013280D3C68 /* CleanLogin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CleanLogin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C197C4A9928A7A320BA4AEBB /* LoginUseCaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginUseCaseTests.swift; sourceTree = "<group>"; };
+		C329BD0330A6EA6800A8D949 /* EditProfileViewModel.swift */ = {isa = PBXFileReference; path = EditProfileViewModel.swift; sourceTree = "<group>"; };
 		C367E7F43094784600F826F9 /* HSKSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HSKSectionView.swift; sourceTree = "<group>"; };
 		C367E7F6309478FA00F826F9 /* HSKLevel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HSKLevel.swift; sourceTree = "<group>"; };
 		C367E7F830947B1E00F826F9 /* HSKLevelCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HSKLevelCell.swift; sourceTree = "<group>"; };
@@ -382,6 +384,7 @@
 				C3F82272309050C300457A4D /* ProfileViewModel.swift */,
 				C3CE87AD308F36BE00E35D1C /* ProfileViewController.swift */,
 				C39463BA30A5741000FA0796 /* EditProfileViewController.swift */,
+				C329BD0330A6EA6800A8D949 /* EditProfileViewModel.swift */,
 			);
 			path = ProfileUser;
 			sourceTree = "<group>";
@@ -639,6 +642,7 @@
 				C386A2793098706200BA60A3 /* LoginHeaderView.swift in Sources */,
 				213C88F3C35DF0FBCB91A23C /* AuthError.swift in Sources */,
 				577886C7AD6E2D189FB25BC3 /* User.swift in Sources */,
+				C329BD0430A6EA6800A8D949 /* EditProfileViewModel.swift in Sources */,
 				578005DD29AC3DA385AD682F /* AuthRepository.swift in Sources */,
 				C3CE87B1308F376B00E35D1C /* AppColors.swift in Sources */,
 				E8B22381571381911019274F /* LoginUseCase.swift in Sources */,

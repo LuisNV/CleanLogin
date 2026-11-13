@@ -1,18 +1,10 @@
 import UIKit
 import PhotosUI
 
-/// A local editing draft. Persist through a repository when an update API is available.
-struct ProfileEditDraft {
-    let user: ProfileUser
-    var birthday: Date?
-    var gender: String?
-    var avatar: UIImage?
-}
-
 final class EditProfileViewController: UIViewController, PHPickerViewControllerDelegate, UITextFieldDelegate {
     var onSave: ((ProfileEditDraft) -> Void)?
     
-    private let draft: ProfileEditDraft
+    private let viewModel: EditProfileViewModel
     private let nameField = UITextField()
     private let emailField = UITextField()
     private let phoneField = UITextField()
@@ -22,19 +14,12 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
     private let genderValueLabel = UILabel()
     private let avatarLabel = UILabel()
     private let avatarImage = UIImageView()
-    private var selectedBirthday: Date?
-    private var selectedGender: String?
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "vi_VN")
-        formatter.dateFormat = "dd/MM/yyyy"
-        return formatter
-    }()
-    
-    init(draft: ProfileEditDraft) {
-        self.draft = draft
-        selectedBirthday = draft.birthday
-        selectedGender = draft.gender
+    convenience init(draft: ProfileEditDraft) {
+        self.init(viewModel: EditProfileViewModel(draft: draft))
+    }
+
+    init(viewModel: EditProfileViewModel) {
+        self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
         hidesBottomBarWhenPushed = true
     }
@@ -152,12 +137,12 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         header.spacing = 8
         let container = UIView()
         container.translatesAutoresizingMaskIntoConstraints = false
-        avatarLabel.text = draft.user.initials
+        avatarLabel.text = viewModel.initials
         avatarLabel.textAlignment = .center
         avatarLabel.font = .systemFont(ofSize: 34, weight: .bold)
         avatarLabel.textColor = AppColors.text
         avatarLabel.backgroundColor = AppColors.avatarBackground
-        avatarImage.image = draft.avatar
+        avatarImage.image = viewModel.avatar
         avatarImage.contentMode = .scaleAspectFill
         for child in [avatarLabel, avatarImage] {
             child.translatesAutoresizingMaskIntoConstraints = false
@@ -214,24 +199,24 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             field.returnKeyType = .done
             field.delegate = self
         }
-        nameField.text = draft.user.fullName
+        nameField.text = viewModel.fullName
         nameField.textContentType = .name
         nameField.autocapitalizationType = .words
-        emailField.text = draft.user.email
+        emailField.text = viewModel.email
         emailField.textContentType = .emailAddress
         emailField.keyboardType = .emailAddress
         emailField.autocapitalizationType = .none
         emailField.autocorrectionType = .no
-        phoneField.text = draft.user.phone
+        phoneField.text = viewModel.phone
         phoneField.textContentType = .telephoneNumber
         phoneField.keyboardType = .phonePad
-        addressField.text = draft.user.address
+        addressField.text = viewModel.address
         addressField.textContentType = .fullStreetAddress
         
         birthdayField.delegate = self
         birthdayField.inputAccessoryView = nil
         birthdayField.placeholder = "dd/MM/yyyy"
-        birthdayField.text = selectedBirthday.map { dateFormatter.string(from: $0) }
+        birthdayField.text = viewModel.birthdayText
         let icon = UIImageView(image: UIImage(systemName: "calendar"))
         icon.tintColor = AppColors.secondaryText
         icon.contentMode = .scaleAspectFit
@@ -245,10 +230,10 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         birthdayField.minimumFontSize = 14
         birthdayField.rightViewMode = .always
         
-        genderValueLabel.text = selectedGender ?? "Chọn"
+        genderValueLabel.text = viewModel.gender ?? "Chọn"
         genderValueLabel.font = .systemFont(ofSize: 16)
         genderValueLabel.textColor = AppColors.text
-        genderButton.accessibilityValue = selectedGender ?? "Chọn"
+        genderButton.accessibilityValue = viewModel.gender ?? "Chọn"
         let chevron = UIImageView(image: UIImage(
             systemName: "chevron.down",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .medium)
@@ -273,7 +258,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         genderButton.showsMenuAsPrimaryAction = true
         genderButton.menu = UIMenu(children: ["Nam", "Nữ", "Khác"].map { gender in
             UIAction(title: gender) { [weak self] _ in
-                self?.selectedGender = gender
+                self?.viewModel.gender = gender
                 self?.genderValueLabel.text = gender
                 self?.genderButton.accessibilityValue = gender
             }
@@ -295,12 +280,12 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
         DatePickerSheet.present(
             from: self,
             title: "Ngày sinh",
-            selectedDate: selectedBirthday,
+            selectedDate: viewModel.birthday,
             maximumDate: Date()
         ) { [weak self] date in
             guard let self else { return }
-            self.selectedBirthday = date
-            self.birthdayField.text = self.dateFormatter.string(from: date)
+            self.viewModel.birthday = date
+            self.birthdayField.text = self.viewModel.birthdayText
         }
     }
     
@@ -313,21 +298,21 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
     }
     
     @objc private func save() {
-        let name = (nameField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let email = (emailField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, email.contains("@"), email.split(separator: "@").count == 2 else {
-            showError("Vui lòng nhập họ tên và email hợp lệ.")
-            return
+        viewModel.fullName = nameField.text ?? ""
+        viewModel.email = emailField.text ?? ""
+        viewModel.phone = phoneField.text ?? ""
+        viewModel.address = addressField.text ?? ""
+
+        do {
+            let draft = try viewModel.makeDraft()
+            onSave?(draft)
+            close()
+        } catch {
+            showError(error.localizedDescription)
         }
-        let user = ProfileUser(
-            fullName: name, email: email,
-            phone: (phoneField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
-            address: (addressField.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-        onSave?(ProfileEditDraft(user: user, birthday: selectedBirthday, gender: selectedGender, avatar: avatarImage.image))
-        close()
     }
     
+
     @objc private func choosePhoto() {
         view.endEditing(true)
         var configuration = PHPickerConfiguration()
@@ -345,6 +330,7 @@ final class EditProfileViewController: UIViewController, PHPickerViewControllerD
             let image = object as? UIImage
             Task { @MainActor [weak self] in
                 if let image {
+                    self?.viewModel.avatar = image
                     self?.avatarImage.image = image
                 } else {
                     self?.showError("Không thể tải ảnh. Vui lòng chọn ảnh khác.")

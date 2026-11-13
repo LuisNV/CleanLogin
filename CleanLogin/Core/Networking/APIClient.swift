@@ -1,220 +1,200 @@
-
 import Foundation
 import Alamofire
 
+/// Client HTTP dùng chung cho mọi feature.
+///
+/// Đây là nơi DUY NHẤT xử lý refresh token:
+/// 1. Request cần đăng nhập bị 401 → refresh một lần (nhiều request cùng lúc chỉ refresh chung một lần).
+/// 2. Retry request đúng một lần với access token mới.
+/// 3. Nếu refresh token không còn hợp lệ → xóa token, gọi `onSessionExpired`, throw `APIError.unauthorized`.
 @MainActor
 final class APIClient {
-    
+
     let baseURL: URL
     let session: Session
-    
-    // Đọc access token hiện tại từ Keychain
-    private let tokenProvider: () throws -> String?
-    private let refreshToken:() throws -> String?
-    private let tokenStore: KeychainTokenStore
-    
+
+    /// Được gọi khi phiên không thể khôi phục. Token đã bị xóa trước khi gọi.
+    /// `AppContainer` nối callback này tới coordinator để đưa người dùng về màn Login.
+    var onSessionExpired: (() -> Void)?
+
+    private let tokenStore: any TokenStore
+    private let refreshPath: String
     private var refreshTask: Task<Void, Error>?
-    
+
     init(
         baseURL: URL,
         session: Session? = nil,
-        tokenStore: KeychainTokenStore,
-        tokenProvider: @escaping () throws -> String?,
-        refreshToken: @escaping () throws -> String?
+        tokenStore: any TokenStore,
+        refreshPath: String = "auth/refresh"
     ) {
         self.baseURL = baseURL
-        self.tokenProvider = tokenProvider
-        self.refreshToken = refreshToken
         self.tokenStore = tokenStore
+        self.refreshPath = refreshPath
         if let session {
             self.session = session
         } else {
             let configuration = URLSessionConfiguration.ephemeral
-            
             configuration.timeoutIntervalForRequest = 20
             configuration.timeoutIntervalForResource = 40
             configuration.httpAdditionalHeaders = [
                 "Accept": "application/json"
             ]
-            
             self.session = Session(configuration: configuration)
         }
     }
-    
+
     // MARK: - Build Request
-    
-    private func buildRequest(
+
+    private func makeRequest(
         path: String,
         method: HTTPMethod,
         body: Data?,
-        requiresAuth: Bool
-    ) throws -> URLRequest {
-        
-        var request = URLRequest(
-            url: baseURL.appendingPathComponent(path)
-        )
-        
+        accessToken: String?
+    ) -> URLRequest {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.method = method
         request.httpBody = body
-        
+
         if body != nil {
-            request.setValue(
-                "application/json",
-                forHTTPHeaderField: "Content-Type"
-            )
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        
-        if requiresAuth {
-            guard let token = try tokenProvider(),
-                  !token.isEmpty else {
-                throw APIError.missingToken
-            }
-            
-            request.setValue(
-                "Bearer \(token)",
-                forHTTPHeaderField: "Authorization"
-            )
+        if let accessToken {
+            request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
-        
         return request
     }
-    
+
+    // MARK: - Session
+
+    private func currentAccessToken() throws -> String? {
+        guard let token = try tokenStore.readAccessToken(), !token.isEmpty else {
+            return nil
+        }
+        return token
+    }
+
+    /// Xóa phiên cục bộ, báo cho app biết và trả về lỗi để caller throw.
+    private func expireSession() -> APIError {
+        try? tokenStore.clear()
+        onSessionExpired?()
+        return .unauthorized
+    }
+
     private func refreshAccessToken() async throws {
-        
-        // Nếu đã có request refresh, chờ kết quả đó
+        // Nếu đã có request refresh đang chạy, chờ chung kết quả đó.
         if let refreshTask {
             try await refreshTask.value
             return
         }
-        
-        let task = Task<Void, Error> { [self] in
-            
-            guard let refreshToken = try refreshToken(),
+
+        let task = Task<Void, Error> { [weak self] in
+            guard let self else { throw CancellationError() }
+
+            guard let refreshToken = try self.tokenStore.readRefreshToken(),
                   !refreshToken.isEmpty else {
-                throw AuthError.sessionExpired
+                throw APIError.unauthorized
             }
-            
-            let body = RefreshRequestDTO(
-                refreshToken: refreshToken
-            )
-            
-            let data = try JSONEncoder().encode(body)
-            
-            let request = try buildRequest(
-                path: "auth/refresh",
+
+            let body = try JSONEncoder().encode(TokenRefreshRequest(refreshToken: refreshToken))
+            let request = self.makeRequest(
+                path: self.refreshPath,
                 method: .post,
-                body: data,
-                requiresAuth: false
+                body: body,
+                accessToken: nil
             )
-            
-            let responseData: Data
-            
+
+            let data: Data
             do {
-                responseData = try await execute(request)
-            } catch let error as APIError where error.statusCode == 401 {
-                throw AuthError.sessionExpired
-            } catch let error as APIError where error.statusCode == 403 {
-                throw AuthError.sessionExpired
+                data = try await self.execute(request)
+            } catch let error as APIError where error.statusCode == 401 || error.statusCode == 403 {
+                throw APIError.unauthorized
             }
-            
-            let response = try decodePayload(LoginResponseDTO.self, from: responseData)
-            
-            guard !response.accessToken.isEmpty,
-                  !response.refreshToken.isEmpty else {
-                throw AuthError.invalidResponse
+
+            let response = try self.decodePayload(TokenRefreshResponse.self, from: data)
+            guard !response.accessToken.isEmpty else {
+                throw APIError.invalidResponse
             }
-            
-            try tokenStore.save(response)
+
+            // Backend có thể xoay vòng refresh token hoặc giữ nguyên token cũ.
+            let newRefreshToken = response.refreshToken.flatMap { $0.isEmpty ? nil : $0 } ?? refreshToken
+            try self.tokenStore.save(
+                AuthTokens(accessToken: response.accessToken, refreshToken: newRefreshToken)
+            )
         }
-        
+
         refreshTask = task
-        
-        defer {
-            refreshTask = nil
+        defer { refreshTask = nil }
+
+        do {
+            try await task.value
+        } catch APIError.unauthorized {
+            throw expireSession()
         }
-        
-        try await task.value
     }
-    
-    private func executeWithRefresh(
+
+    /// Gửi request; với request cần đăng nhập sẽ tự refresh và retry đúng một lần khi gặp 401.
+    private func perform(
         path: String,
         method: HTTPMethod,
         body: Data?,
         requiresAuth: Bool
     ) async throws -> Data {
-        
-        let request = try buildRequest(
-            path: path,
-            method: method,
-            body: body,
-            requiresAuth: requiresAuth
-        )
-        
-        do {
-            return try await execute(request)
-            
-        } catch let error as APIError where error.statusCode == 401 && requiresAuth {
-            
-            // Token được sử dụng trong request bị lỗi
-            let oldAuthorization = request.value(
-                forHTTPHeaderField: "Authorization"
+
+        guard requiresAuth else {
+            return try await execute(
+                makeRequest(path: path, method: method, body: body, accessToken: nil)
             )
-            
-            // Token hiện tại trong Keychain
-            let currentToken = try tokenStore.read()
-            
-            let currentAuthorization = currentToken.map {
-                "Bearer \($0)"
-            }
-            
-            // Chỉ refresh nếu token chưa được thay đổi
-            if oldAuthorization == currentAuthorization {
+        }
+
+        guard let usedToken = try currentAccessToken() else {
+            throw expireSession()
+        }
+
+        do {
+            return try await execute(
+                makeRequest(path: path, method: method, body: body, accessToken: usedToken)
+            )
+        } catch let error as APIError where error.statusCode == 401 {
+            // Chỉ refresh nếu chưa có request nào khác đổi token trong lúc chờ.
+            if try currentAccessToken() == usedToken {
                 try await refreshAccessToken()
             }
-            
-            // Build lại request với token mới
-            let retryRequest = try buildRequest(
-                path: path,
-                method: method,
-                body: body,
-                requiresAuth: true
-            )
-            
-            // Retry đúng một lần
+
+            guard let newToken = try currentAccessToken() else {
+                throw expireSession()
+            }
+
             do {
-                return try await execute(retryRequest)
+                return try await execute(
+                    makeRequest(path: path, method: method, body: body, accessToken: newToken)
+                )
             } catch let error as APIError where error.statusCode == 401 {
-                throw AuthError.sessionExpired
+                throw expireSession()
             }
         }
     }
-    
+
     // MARK: - Execute Request
-    
-    private func execute(
-        _ request: URLRequest
-    ) async throws -> Data {
-        
+
+    private func execute(_ request: URLRequest) async throws -> Data {
+
         let dataRequest = session.request(request)
-            .redirect(
-                using: Redirector(behavior: .doNotFollow)
-            )
-        
+            .redirect(using: Redirector(behavior: .doNotFollow))
+
         let response = await dataRequest.serializingData(
             automaticallyCancelling: true
         ).response
-        
+
         try Task.checkCancellation()
-        
-        if let error = response.error,
-           error.isExplicitlyCancelledError {
+
+        if let error = response.error, error.isExplicitlyCancelledError {
             throw CancellationError()
         }
-        
+
         guard let http = response.response else {
             throw APIError.transport
         }
-        
+
         guard (200..<300).contains(http.statusCode) else {
             if let data = response.data,
                let metadata = try? JSONDecoder().decode(APIResponseMetadata.self, from: data) {
@@ -222,26 +202,29 @@ final class APIClient {
             }
             throw APIError.http(http.statusCode)
         }
-        
+
+        // HTTP 204 không có body, Alamofire có thể báo lỗi serialize dữ liệu rỗng.
+        if http.statusCode == 204 {
+            return Data()
+        }
+
         if response.error != nil {
             throw APIError.transport
         }
-        
+
         guard let data = response.data else {
             throw APIError.invalidResponse
         }
-        
-        // HTTP 204 không có body; các response JSON còn lại dùng envelope chung.
-        if http.statusCode != 204 {
-            let metadata: APIResponseMetadata
-            do {
-                metadata = try JSONDecoder().decode(APIResponseMetadata.self, from: data)
-            } catch {
-                throw APIError.decoding
-            }
-            guard (200..<300).contains(metadata.httpStatus) else {
-                throw APIError.server(statusCode: metadata.httpStatus, response: metadata)
-            }
+
+        // Các response JSON còn lại dùng envelope chung.
+        let metadata: APIResponseMetadata
+        do {
+            metadata = try JSONDecoder().decode(APIResponseMetadata.self, from: data)
+        } catch {
+            throw APIError.decoding
+        }
+        guard (200..<300).contains(metadata.httpStatus) else {
+            throw APIError.server(statusCode: metadata.httpStatus, response: metadata)
         }
         return data
     }
@@ -261,9 +244,9 @@ final class APIClient {
         }
         return payload
     }
-    
+
     // MARK: - Request có Response
-    
+
     func send<Response: Decodable & Sendable>(
         path: String,
         method: HTTPMethod,
@@ -271,47 +254,42 @@ final class APIClient {
         requiresAuth: Bool = false,
         as type: Response.Type
     ) async throws -> Response {
-        
-        let request = try buildRequest(
+        let data = try await perform(
             path: path,
             method: method,
             body: body,
             requiresAuth: requiresAuth
         )
-        
-        let data = try await executeWithRefresh(
-            path: path,
-            method: method,
-            body: body,
-            requiresAuth: requiresAuth
-        )
-        
         return try decodePayload(type, from: data)
     }
-    
+
     // MARK: - Request không có Response
-    
+
     func send(
         path: String,
         method: HTTPMethod,
         body: Data? = nil,
         requiresAuth: Bool = false
     ) async throws {
-        
-        let request = try buildRequest(
-            path: path,
-            method: method,
-            body: body,
-            requiresAuth: requiresAuth
-        )
-        
-        _ = try await executeWithRefresh(
+        _ = try await perform(
             path: path,
             method: method,
             body: body,
             requiresAuth: requiresAuth
         )
     }
+}
+
+// MARK: - Refresh payload
+// Định nghĩa riêng trong Core để APIClient không phụ thuộc DTO của feature Auth.
+
+private struct TokenRefreshRequest: Encodable, Sendable {
+    let refreshToken: String
+}
+
+private struct TokenRefreshResponse: Decodable, Sendable {
+    let accessToken: String
+    let refreshToken: String?
 }
 
 // MARK: - HTTP Methods

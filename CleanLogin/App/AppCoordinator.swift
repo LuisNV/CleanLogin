@@ -4,126 +4,84 @@ import UIKit
 final class AppCoordinator: Coordinator {
     private let navigationController: UINavigationController
     private let container: AppContainer
-    private var bootstrapTask: Task<Void, Never>?
-    
+    private var childCoordinators: [any Coordinator] = []
+
     init(navigationController: UINavigationController, container: AppContainer) {
         self.navigationController = navigationController
         self.container = container
+
+        container.onSessionExpired = { [weak self] in
+            self?.handleSessionExpired()
+        }
     }
-    
+
     func start() {
-        bootstrapTask?.cancel()
-        
         let screen = BootstrapViewController()
-        
+
         screen.onRetry = { [weak self] in
             self?.start()
         }
-        
+
         screen.onReset = { [weak self, weak screen] in
-            guard let self else { return }
-            
             Task { @MainActor [weak self, weak screen] in
                 guard let self else { return }
-                
                 do {
-                    try await self.container.logoutUseCase.execute()
+                    try await self.container.auth.logoutUseCase.execute()
                     self.showLogin()
                 } catch {
-                    screen?.showError(error.localizedDescription)
+                    screen?.showError(ErrorMessage.from(error))
                 }
             }
         }
-        
-        navigationController.setViewControllers(
-            [screen],
-            animated: false
-        )
-        
+
+        navigationController.setViewControllers([screen], animated: false)
         screen.showLoading()
-        
-        let useCase = container.restoreSessionUseCase
-        
-        bootstrapTask = Task { [weak self, weak screen, useCase] in
-            do {
-                let token = try await useCase.execute()
-                
-                try Task.checkCancellation()
-                
-                if token != nil {
-                    self?.showHome()
-                } else {
-                    self?.showLogin()
-                }
-                
-            } catch is CancellationError {
-                return
-            } catch {
-                if !Task.isCancelled {
-                    screen?.showError(error.localizedDescription)
-                }
+
+        do {
+            if try container.auth.restoreSessionUseCase.execute() {
+                showHome()
+            } else {
+                showLogin()
             }
+        } catch {
+            screen.showError(ErrorMessage.from(error))
         }
     }
-    
+
+    // MARK: - Flows
+
     private func showLogin(message: String? = nil) {
-        let screen = container.makeLogin(
-            message: message
-        ) { [weak self] in
-            // Được gọi khi đăng nhập thành công
+        childCoordinators.removeAll()
+
+        let screen = container.auth.makeLogin(message: message) { [weak self] in
             self?.showHome()
         }
-        
-        navigationController.setViewControllers(
-            [screen],
-            animated: false
-        )
+        navigationController.setViewControllers([screen], animated: false)
     }
-    
+
     private func showHome() {
-        let homeVC = container.makeHome()
-        
-        let listeningVC = UIViewController()
-        let progressVC = UIViewController()
-        let profileVC = container.makeAbout( onSuccess:  { [weak self] in
-            Task { @MainActor [weak self] in
-                await self?.logout()
-            }
-        } )
-        
+        let profileCoordinator = ProfileCoordinator(factory: container.profile)
+        profileCoordinator.onLogout = { [weak self] in
+            self?.showLogin()
+        }
+        profileCoordinator.start()
+        childCoordinators = [profileCoordinator]
+
+        // Listening và Progress chưa có feature, tạm dùng màn trống.
         let tabBarController = MainTabBarController(
-            home: homeVC,
-            listening: listeningVC,
-            progress: progressVC,
-            profile: profileVC
+            home: container.makeHome(),
+            listening: UIViewController(),
+            progress: UIViewController(),
+            profile: profileCoordinator.navigationController
         )
-        
-        navigationController.setViewControllers(
-            [tabBarController],
-            animated: true
-        )
-        
-        navigationController.setNavigationBarHidden(
-            true,
-            animated: false
-        )
+
+        navigationController.setViewControllers([tabBarController], animated: true)
+        navigationController.setNavigationBarHidden(true, animated: false)
     }
-    private func showAbout() {
-        //                let screen = container.makeAbout(
-        //                    onSuccess:  { [weak self] in
-        //                        Task { @MainActor [weak self] in
-        //                            await self?.logout()
-        //                        }
-        //                    }
-        //                )
-        //
-        //        navigationController.setViewControllers(
-        //            [screen],
-        //            animated: true
-        //        )
-    }
-    @MainActor
-    func logout() async {
-        showLogin()
+
+    private func handleSessionExpired() {
+        // Nhiều request có thể cùng hết phiên; chỉ chuyển màn một lần.
+        guard !(navigationController.viewControllers.first is LoginViewController) else { return }
+        showLogin(message: AuthError.sessionExpired.localizedDescription)
     }
 }

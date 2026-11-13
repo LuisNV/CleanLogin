@@ -26,7 +26,7 @@ final class KeychainTokenStore: TokenStore {
     
     // MARK: - Read
     
-    func read() throws -> String? {
+    func readAccessToken() throws -> String? {
         try readToken(account: accessTokenAccount)
     }
     
@@ -64,17 +64,19 @@ final class KeychainTokenStore: TokenStore {
     
     // MARK: - Save
     
-    func save(_ token: LoginResponseDTO) throws {
-        
-        try saveToken(
-            token.accessToken,
-            account: accessTokenAccount
-        )
-        
-        try saveToken(
-            token.refreshToken,
-            account: refreshTokenAccount
-        )
+    func save(_ tokens: AuthTokens) throws {
+        // Kiểm tra trước để không ghi một nửa rồi mới phát hiện token rỗng.
+        guard !tokens.accessToken.isEmpty, !tokens.refreshToken.isEmpty else {
+            throw StorageError.operationFailed(errSecParam)
+        }
+        do {
+            try saveToken(tokens.refreshToken, account: refreshTokenAccount)
+            try saveToken(tokens.accessToken, account: accessTokenAccount)
+        } catch {
+            // Không để lại phiên dở dang (ví dụ còn access token nhưng mất refresh token).
+            try? clear()
+            throw error
+        }
     }
     
     private func saveToken(

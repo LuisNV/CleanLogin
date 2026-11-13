@@ -1,80 +1,59 @@
 import UIKit
 
-// Composition root. Chỉ nơi này biết implementation cụ thể của các tầng.
+// Composition root. Chỉ nơi này chọn implementation cụ thể (mock hay API)
+// và chia phụ thuộc dùng chung cho factory của từng feature.
 @MainActor
 final class AppContainer {
     let configuration: AppConfiguration
-    private let loginUseCase: any LoginUseCaseProtocol
-    let restoreSessionUseCase: any RestoreSessionUseCaseProtocol
-    let logoutUseCase: any LogoutUseCaseProtocol
-    let getUserUseCase: any GetUserUseCaseProtocol
-    
+    let auth: AuthFactory
+    let profile: ProfileFactory
+
+    /// Phiên hết hạn và không refresh được. AppCoordinator đăng ký để đưa người dùng về Login.
+    var onSessionExpired: (() -> Void)?
+
     init(configuration: AppConfiguration) {
         self.configuration = configuration
-        
-        // 1. Tạo nơi lưu và đọc token trước
-        let store = KeychainTokenStore(
-            service: configuration.tokenNamespace
-        )
-        
-        // 2. Tạo service theo môi trường
-        let service: any AuthService
-        
+
+        // 1. Một token store dùng chung cho APIClient và repository.
+        let tokenStore = KeychainTokenStore(service: configuration.tokenNamespace)
+
+        // 2. Chọn service theo môi trường.
+        let authService: any AuthService
+        let userService: any UserService
+        let client: APIClient?
+
         switch configuration.mode {
         case .mock:
-            service = MockAuthService()
-            
+            authService = MockAuthService()
+            userService = MockUserService()
+            client = nil
+
         case .localAPI, .remoteAPI:
             // AppConfiguration.load đã kiểm tra URL của hai mode này.
-            let client = APIClient(
-                baseURL: configuration.baseURL!,
-                tokenStore: store,
-                tokenProvider: {
-                    try store.read()
-                },
-                refreshToken: {
-                    try store.readRefreshToken()
-                }
-            )
-            
-            service = RemoteAuthService(client: client)
+            guard let baseURL = configuration.baseURL else {
+                preconditionFailure("AppConfiguration phải có baseURL cho mode \(configuration.mode)")
+            }
+            let apiClient = APIClient(baseURL: baseURL, tokenStore: tokenStore)
+            authService = RemoteAuthService(client: apiClient)
+            userService = RemoteUserService(client: apiClient)
+            client = apiClient
         }
-        
-        // 3. Repository dùng cùng store với APIClient
-        let repository = DefaultAuthRepository(
-            service: service,
-            tokenStore: store
+
+        // 3. Mỗi feature tự lắp ráp UseCase/ViewModel của mình.
+        auth = AuthFactory(
+            service: authService,
+            tokenStore: tokenStore,
+            modeTitle: configuration.title,
+            showDemoCredentials: configuration.mode != .remoteAPI
         )
-        
-        // 4. Tạo các UseCase
-        loginUseCase = LoginUseCase(repository: repository)
-        
-        restoreSessionUseCase = RestoreSessionUseCase(
-            repository: repository
-        )
-        
-        logoutUseCase = LogoutUseCase(repository: repository)
-        
-        getUserUseCase = GetUserUseCase(repository: repository)
+        profile = ProfileFactory(service: userService, logoutUseCase: auth.logoutUseCase)
+
+        client?.onSessionExpired = { [weak self] in
+            self?.onSessionExpired?()
+        }
     }
-    
-    func makeLogin(message: String? = nil, onSuccess: @escaping () -> Void) -> LoginViewController {
-        let viewModel = LoginViewModel(loginUseCase: loginUseCase, initialMessage: message)
-        viewModel.onLoginSuccess = onSuccess
-        return LoginViewController(viewModel: viewModel, modeTitle: configuration.title,
-                                   showDemoCredentials: configuration.mode != .remoteAPI)
-    }
-    
+
     func makeHome() -> HomeViewController {
-        let viewModel = HomeViewModel()
-       
-        return HomeViewController(viewModel: viewModel)
-    }
-    func makeAbout(onSuccess: @escaping () -> Void) -> ProfileViewController{
-        let viewModel = ProfileViewModel(getUserUseCase: getUserUseCase,logoutUseCase: logoutUseCase)
-        viewModel.onLogoutSuccess = onSuccess
-        return ProfileViewController(
-            viewModel: viewModel
-        )
+        HomeViewController(viewModel: HomeViewModel())
     }
 }

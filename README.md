@@ -77,36 +77,57 @@ python3 Backend/server.py --token-ttl 15
 
 ## Cách chia code
 
+Code chia theo **feature** (vertical slice). Mỗi feature tự chứa Domain/Data/Presentation của mình; phần dùng chung nằm ở `Core` và `Shared`.
+
+```
+CleanLogin/
+├── App/            # Lifecycle, cấu hình, AppContainer (composition root), AppCoordinator
+├── Core/           # Không biết gì về feature
+│   ├── Networking/ # APIClient (nơi DUY NHẤT refresh token), APIError, APIResponse
+│   ├── Storage/    # TokenStore, AuthTokens, KeychainTokenStore
+│   └── DesignSystem/ # AppColors, AppFonts, Loading, Toast, FormFieldView, DatePickerSheet
+├── Shared/         # Dùng chung giữa nhiều feature
+│   ├── Domain/     # User, AuthError
+│   ├── Data/       # AuthErrorMapper (APIError → AuthError), DemoAccount (dữ liệu mock)
+│   └── Presentation/ # BootstrapViewController, MainTabBarController, ErrorMessage
+└── Features/
+    ├── Auth/       # Đăng nhập, khôi phục phiên, đăng xuất + AuthFactory
+    ├── Profile/    # Hồ sơ, chỉnh sửa + ProfileFactory, ProfileCoordinator
+    ├── Home/       # Chỉ có Presentation (chưa có API)
+    └── About/
+```
+
 | Nhóm | Trách nhiệm | Ví dụ |
 |---|---|---|
-| `Domain/Entities` | Model và lỗi nghiệp vụ | `User`, `AuthError` |
-| `Domain/Repositories` | Hợp đồng truy cập dữ liệu | `AuthRepository` |
-| `Domain/UseCases` | Thao tác ứng dụng, validate trước khi gọi repository | `LoginUseCase`, `RestoreSessionUseCase`, `LogoutUseCase` |
-| `Data/DTOs` | Cấu trúc JSON của API | `LoginResponseDTO`, `UserDTO` |
-| `Data/Services` | Gọi endpoint hoặc cung cấp dữ liệu giả | `RemoteAuthService`, `MockAuthService` |
-| `Data/Repositories` | Thực hiện hợp đồng Domain, map DTO/lỗi, quản lý token | `DefaultAuthRepository` |
-| `Core/Networking` | HTTP client dùng chung | `APIClient`, `APIError` |
-| `Core/Storage` | Hợp đồng và triển khai lưu token | `TokenStore`, `KeychainTokenStore` |
-| `Presentation/Login` | Form và state đăng nhập | `LoginViewController`, `LoginViewModel`, `LoginViewState` |
-| `Presentation/Home` | Tài khoản, refresh và logout | `HomeViewController`, `HomeViewModel` |
-| `Presentation/Shared` | Màn hình kiểm tra phiên/lỗi khởi động | `BootstrapViewController` |
-| `App` | Cấu hình, lifecycle, DI và điều hướng | `AppContainer`, `AppCoordinator`, `SceneDelegate` |
+| `Features/<X>/Domain` | Hợp đồng repository và UseCase của feature | `AuthRepository`, `LoginUseCase`, `UserRepository` |
+| `Features/<X>/Data` | DTO, service (remote/mock), repository triển khai Domain | `AuthDTOs`, `RemoteAuthService`, `DefaultUserRepository` |
+| `Features/<X>/Presentation` | ViewController, ViewModel, state | `LoginViewModel`, `ProfileViewController` |
+| `Features/<X>/<X>Factory` | Lắp ráp UseCase/ViewModel/màn hình của feature | `AuthFactory`, `ProfileFactory` |
+| `Features/<X>/<X>Coordinator` | Điều hướng bên trong feature (nếu có nhiều màn) | `ProfileCoordinator` |
+| `App` | Chọn mock hay API, chia phụ thuộc chung cho các factory, điều hướng giữa các feature | `AppContainer`, `AppCoordinator` |
 
-**Quy tắc phụ thuộc:** Presentation dùng Domain; Data triển khai protocol Domain; App nối các implementation. Domain không import UIKit, RxSwift, Alamofire hoặc Security. Domain được giữ sạch khỏi thư viện UI/network; các protocol dùng async/await và `@MainActor` để giữ ví dụ dễ theo dõi. Tác vụ mạng là async, không chặn giao diện. Không dùng cách này để chạy xử lý CPU nặng trên main actor.
+**Quy tắc phụ thuộc:**
 
-Các tầng ở đây là folder trong một app target, chưa tách thành Swift Package/module riêng. Xcode chưa cưỡng chế ranh giới module; cần tuân thủ quy tắc import/code review. Đây là Clean Architecture ở mức tổ chức trách nhiệm và đảo chiều dependency, không phải bộ framework tự động.
+- Domain không import UIKit, RxSwift, Alamofire hoặc Security, và không biết DTO/token.
+- `Core` không biết feature nào (APIClient tự định nghĩa payload refresh, chỉ throw `APIError`).
+- Feature không gọi màn hình của feature khác. Muốn chuyển màn thì báo ra ngoài bằng callback (`onLoginSuccess`, `onLogout`), `AppCoordinator` quyết định đi đâu.
+- Thứ nhiều feature cùng cần (`User`, `AuthError`) đặt ở `Shared`, không copy.
+- Feature chưa có dữ liệu thật (Home, About) chỉ cần thư mục `Presentation`.
+
+**Hết phiên:** khi request cần đăng nhập bị 401, `APIClient` refresh một lần rồi retry. Nếu refresh token cũng hết hạn, nó xóa token, gọi `onSessionExpired` (AppContainer → AppCoordinator đưa về Login) và throw `APIError.unauthorized` (repository map thành `AuthError.sessionExpired`).
+
+Các feature là folder trong một app target, chưa tách thành Swift Package. Xcode chưa cưỡng chế ranh giới; cần tuân thủ quy tắc trên khi code review. Khi số feature hoặc số người làm tăng, có thể tách mỗi feature thành một package.
 
 ## Nên đọc theo thứ tự nào?
 
-1. `Domain/Entities/User.swift` và `AuthError.swift`.
-2. `Domain/Repositories/AuthRepository.swift`.
-3. `Domain/UseCases/LoginUseCase.swift`.
-4. `Presentation/Login/LoginViewModel.swift`.
-5. `Presentation/Login/LoginViewController.swift`.
-6. `Data/Repositories/DefaultAuthRepository.swift`.
-7. `Data/Services/RemoteAuthService.swift`, `Data/DTOs/AuthDTOs.swift`.
-8. `Core/Networking/APIClient.swift`, `Core/Storage/KeychainTokenStore.swift`.
-9. `App/AppContainer.swift`, `App/AppCoordinator.swift`, `App/SceneDelegate.swift`.
+1. `Shared/Domain/User.swift`, `Shared/Domain/AuthError.swift`.
+2. `Features/Auth/Domain/AuthRepository.swift`, `LoginUseCase.swift`.
+3. `Features/Auth/Presentation/Login/LoginViewModel.swift`, `LoginViewController.swift`.
+4. `Features/Auth/Data/DefaultAuthRepository.swift`, `RemoteAuthService.swift`, `AuthDTOs.swift`.
+5. `Features/Auth/AuthFactory.swift`.
+6. `Features/Profile/` theo cùng thứ tự, rồi `ProfileCoordinator.swift`.
+7. `Core/Networking/APIClient.swift`, `Core/Storage/KeychainTokenStore.swift`.
+8. `App/AppContainer.swift`, `App/AppCoordinator.swift`, `App/SceneDelegate.swift`.
 
 Xem **`Docs/LEARNING_GUIDE.md`** để theo dõi một lần bấm đăng nhập và đối chiếu với Flutter/Cubit. Xem **`Docs/TESTING.md`** để chạy test và kiểm tra thủ công.
 
